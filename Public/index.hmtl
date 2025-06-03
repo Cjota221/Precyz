@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precyz - Precificação e Gestão</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Raleway:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fdfdfd; /* Branco gelo */
+            color: #4b4b4b; /* Grafite suave */
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+        }
+        .btn-primary {
+            background-color: #d295bf; /* Rosa queimado */
+            color: white;
+            font-weight: 500;
+            border-radius: 8px;
+            padding: 10px 20px;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #c180ab; /* Rosa queimado mais escuro */
+        }
+        .btn-secondary {
+            background-color: #e8e2f0; /* Lavanda clara */
+            color: #4b4b4b;
+            font-weight: 500;
+            border-radius: 8px;
+            padding: 10px 20px;
+            transition: background-color 0.2s;
+        }
+        .btn-secondary:hover {
+            background-color: #d9d2e0;
+        }
+        .input-field {
+            border: 1px solid #e8e2f0; /* Lavanda clara */
+            border-radius: 8px;
+            padding: 10px;
+            width: 100%;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-field:focus {
+            border-color: #d295bf; /* Rosa queimado */
+            box-shadow: 0 0 0 2px rgba(210, 149, 191, 0.3);
+            outline: none;
+        }
+        .custom-alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            font-size: 0.9rem;
+        }
+        .alert-success { background-color: #4CAF50; } /* Verde para sucesso */
+        .alert-error { background-color: #F44336; } /* Vermelho para erro */
+        .alert-info { background-color: #2196F3; } /* Azul para informação */
+        .hidden { display: none; }
+
+        /* Estilo para o modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .modal-content {
+            background-color: #fdfdfd;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 90%;
+            width: 500px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .table-zebra tbody tr:nth-child(odd) {
+            background-color: #f7e7df; /* Nude rosado */
+        }
+        .table-zebra th {
+            background-color: #e8e2f0; /* Lavanda clara */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-6 md:p-8">
+    <header class="w-full max-w-4xl mb-8 text-center">
+        <h1 class="text-3xl sm:text-4xl font-bold text-[#d295bf]">Precyz</h1>
+        <p class="text-sm text-gray-500 mt-1">Sua assistente de precificação e gestão financeira.</p>
+        <p id="user-id-display" class="text-xs text-gray-400 mt-2"></p>
+        <p id="auth-status" class="text-xs text-gray-400"></p>
+    </header>
+
+    <main id="app-container" class="w-full max-w-4xl">
+        <div id="menu-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+            </div>
+        <div id="content-area" class="card p-6 sm:p-8 min-h-[300px]">
+            <p class="text-center text-gray-500">Selecione uma opção do menu para começar.</p>
+        </div>
+    </main>
+
+    <div id="custom-alert-container"></div>
+
+    <div id="modal-template" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-semibold mb-4 text-[#d295bf]">Título do Modal</h3>
+            <p id="modal-message" class="mb-6">Mensagem do modal.</p>
+            <div class="flex justify-end space-x-3">
+                <button id="modal-cancel-btn" class="btn-secondary">Cancelar</button>
+                <button id="modal-confirm-btn" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="w-full max-w-4xl mt-12 text-center text-xs text-gray-400">
+        <p>&copy; <span id="current-year"></span> Precyz. Todos os direitos reservados.</p>
+    </footer>
+
+    <script type="module">
+        // Importações do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged,
+            setPersistence,
+            browserLocalPersistence 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            addDoc,
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            query, 
+            where, 
+            getDocs,
+            Timestamp,
+            enableIndexedDbPersistence,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Configuração do Firebase (será preenchida pelo ambiente Canvas)
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "DEMO_KEY", authDomain: "DEMO.firebaseapp.com", projectId: "DEMO-PROJECT" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'precyz-app'; // Nome da App alterado para Precyz
+        
+        setLogLevel('debug'); // Para logs detalhados do Firestore no console
+
+        // Inicialização do Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let userId = null;
+        let isAuthReady = false;
+
+        // Elementos da UI
+        const menuContainer = document.getElementById('menu-container');
+        const contentArea = document.getElementById('content-area');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const authStatusDisplay = document.getElementById('auth-status');
+        const customAlertContainer = document.getElementById('custom-alert-container');
+        const currentYearSpan = document.getElementById('current-year');
+        currentYearSpan.textContent = new Date().getFullYear();
+
+        // --- Autenticação ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                userIdDisplay.textContent = `ID Usuária: ${userId.substring(0,8)}...`; // Mostrar parte do ID
+                authStatusDisplay.textContent = "Status: Autenticada.";
+                console.log("Usuário autenticado:", userId);
+                isAuthReady = true;
+                loadInitialData(); // Carregar dados após autenticação
+            } else {
+                authStatusDisplay.textContent = "Status: Autenticando...";
+                console.log("Nenhum usuário autenticado, tentando login anônimo ou com token.");
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                        console.log("Login com Custom Token bem-sucedido.");
+                    } else {
+                        await signInAnonymously(auth);
+                        console.log("Login anônimo bem-sucedido.");
+                    }
+                    // O listener onAuthStateChanged será chamado novamente após o login
+                } catch (error) {
+                    console.error("Erro na autenticação:", error);
+                    userIdDisplay.textContent = "Erro de autenticação.";
+                    authStatusDisplay.textContent = "Status: Falha na autenticação.";
+                    isAuthReady = false; // Marcar como não pronto se falhar
+                    showCustomAlert(`Falha na autenticação: ${error.message}. Verifique a configuração do Firebase.`, 'error', 10000);
+                }
+            }
+            renderMenu(); // Renderizar menu após tentativa de auth
+        });
+        
+        // Tentar habilitar persistência offline
+        enableIndexedDbPersistence(db)
+        .catch((err) => {
+            if (err.code == 'failed-precondition') {
+                console.warn("Persistência do Firestore: Múltiplas abas abertas, persistência pode não estar habilitada.");
+            } else if (err.code == 'unimplemented') {
+                console.warn("Persistência do Firestore: Navegador não suporta persistência offline.");
+            }
+        });
+
+
+        // --- Funções Auxiliares ---
+        function showCustomAlert(message, type = 'info', duration = 3000) {
+            const alertId = `alert-${Date.now()}`;
+            const alertDiv = document.createElement('div');
+            alertDiv.id = alertId;
+            alertDiv.className = `custom-alert alert-${type}`;
+            alertDiv.textContent = message;
+            customAlertContainer.appendChild(alertDiv);
+
+            setTimeout(() => {
+                const activeAlert = document.getElementById(alertId);
+                if (activeAlert) {
+                    activeAlert.remove();
+                }
+            }, duration);
+        }
+        
+        function showModal(title, message, onConfirm, onCancel) {
+            const modal = document.getElementById('modal-template');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').innerHTML = message; // Usar innerHTML para permitir HTML na mensagem
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+
+            // Remover event listeners antigos para evitar múltiplas execuções
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            const newCancelBtn = cancelBtn.cloneNode(true);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+            if (onConfirm) {
+                newConfirmBtn.style.display = 'inline-block';
+                newConfirmBtn.onclick = () => {
+                    onConfirm();
+                    modal.classList.add('hidden');
+                };
+            } else {
+                 newConfirmBtn.style.display = 'none';
+            }
+
+            if (onCancel) {
+                newCancelBtn.textContent = "Cancelar";
+                newCancelBtn.style.display = 'inline-block';
+                newCancelBtn.onclick = () => {
+                    onCancel();
+                    modal.classList.add('hidden');
+                };
+            } else {
+                 newCancelBtn.textContent = "Fechar"; // Se não houver onCancel, o botão apenas fecha
+                 newCancelBtn.onclick = () => modal.classList.add('hidden');
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+
+        function formatCurrency(value) {
+            if (typeof value !== 'number') {
+                value = parseFloat(value) || 0;
+            }
+            return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function parseCurrency(value) {
+            if (typeof value !== 'string') return value;
+            return parseFloat(value.replace(/\R\$\s?/, '').replace(/\./g, '').replace(',', '.')) || 0;
+        }
+
+        // --- Estrutura do Menu ---
+        const menuItems = [
+            { id: 'priceProduct', title: 'Precificar Produto', icon: '🏷️', action: renderProductPricerSection },
+            { id: 'fixedCosts', title: 'Custos Fixos', icon: '🏠', action: renderFixedCostsSection },
+            { id: 'variableCosts', title: 'Custos Variáveis', icon: '🛍️', action: renderVariableCostsSection },
+            { id: 'freightSimulator', title: 'Simular Frete', icon: '🚚', action: renderFreightSimulatorSection },
+            { id: 'transactions', title: 'Entradas e Saídas', icon: '📊', action: renderTransactionsSection },
+            { id: 'dashboard', title: 'Dashboard Resumo', icon: '📈', action: renderDashboardSection },
+        ];
+
+        function renderMenu() {
+            menuContainer.innerHTML = ''; // Limpa o menu existente
+            if (!isAuthReady && !(typeof __initial_auth_token === 'undefined' && !__initial_auth_token)) { // Se não estiver autenticado e não for o caso de login anônimo inicial
+                 // Não renderiza o menu se a autenticação ainda não estiver pronta ou falhou (exceto no primeiro load anônimo)
+                contentArea.innerHTML = `<p class="text-center text-gray-500">Aguardando autenticação para carregar as funcionalidades...</p>`;
+                return;
+            }
+
+            menuItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card p-5 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#f7e7df]'; // Nude rosado no hover
+                card.innerHTML = `
+                    <span class="text-3xl mb-2">${item.icon}</span>
+                    <h3 class="font-semibold text-lg text-[#d295bf]">${item.title}</h3>
+                `;
+                card.onclick = () => {
+                    if (!isAuthReady) {
+                        showCustomAlert("Aguarde a autenticação ser concluída.", "info");
+                        return;
+                    }
+                    setActiveCard(card);
+                    item.action();
+                };
+                menuContainer.appendChild(card);
+            });
+        }
+        
+        function setActiveCard(selectedCard) {
+            // Remove a classe 'active' de todos os cards
+            const allCards = menuContainer.querySelectorAll('.card');
+            allCards.forEach(card => card.classList.remove('ring-2', 'ring-[#d295bf]'));
+            // Adiciona a classe 'active' ao card selecionado
+            if (selectedCard) {
+                selectedCard.classList.add('ring-2', 'ring-[#d295bf]');
+            }
+        }
+
+        // --- Funções de Seção ---
+
+        // Base path for user data
+        const getUserDataPath = (collectionName) => `artifacts/${appId}/users/${userId}/${collectionName}`;
+        const getAppSettingsPath = () => `artifacts/${appId}/users/${userId}/settings/appSettings`;
+
+        let fixedCostsCache = [];
+        let variableCostsCache = [];
+        let transactionsCache = [];
+        let appSettingsCache = { averageMonthlyPairsSold: 0 };
+
+        async function loadInitialData() {
+            if (!isAuthReady || !userId) return;
+
+            // Carregar Configurações do App (averageMonthlyPairsSold)
+            const appSettingsRef = doc(db, getAppSettingsPath());
+            onSnapshot(appSettingsRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    appSettingsCache = docSnap.data();
+                } else {
+                    appSettingsCache = { averageMonthlyPairsSold: 0 }; // Default
+                    setDoc(appSettingsRef, appSettingsCache); // Cria se não existir
+                }
+                // Se alguma seção estiver ativa e depender disso, pode precisar de re-render.
+                // Ex: se a seção de precificação estiver aberta.
+                const activePricer = document.getElementById('product-pricer-form');
+                if (activePricer) renderProductPricerSection(); // Re-renderiza se estiver aberta
+            }, error => console.error("Erro ao carregar configurações:", error));
+
+            // Carregar Custos Fixos
+            const fixedCostsQuery = query(collection(db, getUserDataPath('fixedCosts')));
+            onSnapshot(fixedCostsQuery, (snapshot) => {
+                fixedCostsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const activeFixedCosts = document.getElementById('fixed-costs-list');
+                if (activeFixedCosts) renderFixedCostsSection(); // Re-renderiza se estiver aberta
+            }, error => console.error("Erro ao carregar custos fixos:", error));
+
+            // Carregar Custos Variáveis
+            const variableCostsQuery = query(collection(db, getUserDataPath('variableCosts')));
+            onSnapshot(variableCostsQuery, (snapshot) => {
+                variableCostsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const activeVariableCosts = document.getElementById('variable-costs-list');
+                if (activeVariableCosts) renderVariableCostsSection(); // Re-renderiza se estiver aberta
+            }, error => console.error("Erro ao carregar custos variáveis:", error));
+            
+            // Carregar Transações
+            const transactionsQuery = query(collection(db, getUserDataPath('transactions'))); // Poderia ordenar por data aqui
+            onSnapshot(transactionsQuery, (snapshot) => {
+                transactionsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Ordenar transações por data (mais recentes primeiro)
+                transactionsCache.sort((a, b) => {
+                    const dateA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
+                    const dateB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
+                    return dateB - dateA;
+                });
+                const activeTransactions = document.getElementById('transactions-list');
+                if (activeTransactions) renderTransactionsSection();
+                const activeDashboard = document.getElementById('dashboard-content');
+                if (activeDashboard) renderDashboardSection();
+            }, error => console.error("Erro ao carregar transações:", error));
+        }
+
+
+        // 1. Custos Fixos
+        async function renderFixedCostsSection() {
+            contentArea.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Custos Fixos Mensais</h2>
+                <form id="fixed-cost-form" class="mb-6 space-y-4">
+                    <div>
+                        <label for="costName" class="block text-sm font-medium mb-1">Nome do Custo:</label>
+                        <input type="text" id="costName" class="input-field" placeholder="Ex: Aluguel, Internet" required>
+                    </div>
+                    <div>
+                        <label for="costValue" class="block text-sm font-medium mb-1">Valor (R$):</label>
+                        <input type="text" id="costValue" inputmode="decimal" class="input-field" placeholder="Ex: 500,00" required>
+                    </div>
+                    <button type="submit" class="btn-primary w-full sm:w-auto">Adicionar Custo Fixo</button>
+                </form>
+
+                <div class="mb-6">
+                    <label for="avgPairsSold" class="block text-sm font-medium mb-1">Média de Pares Vendidos por Mês:</label>
+                    <input type="number" id="avgPairsSold" class="input-field" value="${appSettingsCache.averageMonthlyPairsSold || 0}" placeholder="Ex: 50">
+                </div>
+                
+                <h3 class="text-xl font-medium mb-3">Lista de Custos Fixos</h3>
+                <div id="fixed-costs-list" class="space-y-2"></div>
+                <div class="mt-6 p-4 bg-[#e8e2f0] rounded-lg">
+                    <p class="text-lg font-semibold">Custo Fixo Total Mensal: <span id="total-fixed-cost" class="text-[#d295bf]">R$ 0,00</span></p>
+                    <p class="text-lg font-semibold">Custo Fixo por Par: <span id="fixed-cost-per-pair" class="text-[#d295bf]">R$ 0,00</span></p>
+                </div>
+            `;
+
+            const form = document.getElementById('fixed-cost-form');
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('costName').value.trim();
+                const value = parseCurrency(document.getElementById('costValue').value);
+                if (name && value > 0) {
+                    try {
+                        await addDoc(collection(db, getUserDataPath('fixedCosts')), { costName: name, costValue: value });
+                        showCustomAlert('Custo fixo adicionado!', 'success');
+                        form.reset();
+                    } catch (error) {
+                        console.error("Erro ao adicionar custo fixo:", error);
+                        showCustomAlert('Erro ao adicionar custo. Tente novamente.', 'error');
+                    }
+                } else {
+                    showCustomAlert('Por favor, preencha nome e valor válidos.', 'error');
+                }
+            };
+
+            const avgPairsInput = document.getElementById('avgPairsSold');
+            avgPairsInput.onchange = async (e) => {
+                const newAvg = parseInt(e.target.value) || 0;
+                appSettingsCache.averageMonthlyPairsSold = newAvg;
+                try {
+                    await setDoc(doc(db, getAppSettingsPath()), { averageMonthlyPairsSold: newAvg }, { merge: true });
+                    showCustomAlert('Média de pares atualizada!', 'success');
+                    updateFixedCostSummary();
+                } catch (error) {
+                    console.error("Erro ao atualizar média de pares:", error);
+                    showCustomAlert('Erro ao atualizar média. Tente novamente.', 'error');
+                }
+            };
+            
+            // Input mask for currency
+            document.getElementById('costValue').addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value) {
+                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+                } else {
+                    e.target.value = '';
+                }
+            });
+
+
+            updateFixedCostList();
+            updateFixedCostSummary();
+        }
+
+        function updateFixedCostList() {
+            const listDiv = document.getElementById('fixed-costs-list');
+            if (!listDiv) return;
+            listDiv.innerHTML = '';
+            if (fixedCostsCache.length === 0) {
+                listDiv.innerHTML = '<p class="text-gray-500">Nenhum custo fixo cadastrado.</p>';
+                return;
+            }
+            fixedCostsCache.forEach(cost => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center p-3 bg-white rounded-md shadow-sm';
+                itemDiv.innerHTML = `
+                    <span>${cost.costName}: ${formatCurrency(cost.costValue)}</span>
+                    <button class="text-red-500 hover:text-red-700 text-sm font-medium" data-id="${cost.id}">Excluir</button>
+                `;
+                itemDiv.querySelector('button').onclick = async () => {
+                     showModal(
+                        'Confirmar Exclusão',
+                        `Tem certeza que deseja excluir o custo "${cost.costName}"?`,
+                        async () => {
+                            try {
+                                await deleteDoc(doc(db, getUserDataPath('fixedCosts'), cost.id));
+                                showCustomAlert('Custo fixo excluído!', 'success');
+                                // updateFixedCostList e updateFixedCostSummary serão chamados pelo onSnapshot
+                            } catch (error) {
+                                console.error("Erro ao excluir custo fixo:", error);
+                                showCustomAlert('Erro ao excluir. Tente novamente.', 'error');
+                            }
+                        },
+                        () => {} // Ação para cancelar (nenhuma, apenas fecha o modal)
+                    );
+                };
+                listDiv.appendChild(itemDiv);
+            });
+            updateFixedCostSummary();
+        }
+
+        function updateFixedCostSummary() {
+            const totalCost = fixedCostsCache.reduce((sum, cost) => sum + cost.costValue, 0);
+            const avgPairs = appSettingsCache.averageMonthlyPairsSold || 0;
+            const costPerPair = avgPairs > 0 ? totalCost / avgPairs : 0;
+
+            const totalCostEl = document.getElementById('total-fixed-cost');
+            const costPerPairEl = document.getElementById('fixed-cost-per-pair');
+            if (totalCostEl) totalCostEl.textContent = formatCurrency(totalCost);
+            if (costPerPairEl) costPerPairEl.textContent = formatCurrency(costPerPair);
+        }
+
+        // 2. Custos Variáveis
+        async function renderVariableCostsSection() {
+            contentArea.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Custos Variáveis por Produto</h2>
+                <form id="variable-cost-form" class="mb-6 space-y-4">
+                    <div>
+                        <label for="itemName" class="block text-sm font-medium mb-1">Nome do Item:</label>
+                        <input type="text" id="itemName" class="input-field" placeholder="Ex: Caixa, Sacola, Mimo" required>
+                    </div>
+                    <div>
+                        <label for="itemValue" class="block text-sm font-medium mb-1">Custo Unitário (R$):</label>
+                        <input type="text" id="itemValue" inputmode="decimal" class="input-field" placeholder="Ex: 1,50" required>
+                    </div>
+                    <button type="submit" class="btn-primary w-full sm:w-auto">Adicionar Custo Variável</button>
+                </form>
+                
+                <h3 class="text-xl font-medium mb-3">Lista de Custos Variáveis</h3>
+                <div id="variable-costs-list" class="space-y-2"></div>
+            `;
+
+            const form = document.getElementById('variable-cost-form');
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('itemName').value.trim();
+                const value = parseCurrency(document.getElementById('itemValue').value);
+                if (name && value > 0) {
+                     try {
+                        await addDoc(collection(db, getUserDataPath('variableCosts')), { itemName: name, itemValue: value });
+                        showCustomAlert('Custo variável adicionado!', 'success');
+                        form.reset();
+                    } catch (error) {
+                        console.error("Erro ao adicionar custo variável:", error);
+                        showCustomAlert('Erro ao adicionar. Tente novamente.', 'error');
+                    }
+                } else {
+                    showCustomAlert('Por favor, preencha nome e valor válidos.', 'error');
+                }
+            };
+            
+            document.getElementById('itemValue').addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                 if (value) {
+                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+                } else {
+                    e.target.value = '';
+                }
+            });
+
+            updateVariableCostList();
+        }
+
+        function updateVariableCostList() {
+            const listDiv = document.getElementById('variable-costs-list');
+            if (!listDiv) return;
+            listDiv.innerHTML = '';
+            if (variableCostsCache.length === 0) {
+                listDiv.innerHTML = '<p class="text-gray-500">Nenhum custo variável cadastrado.</p>';
+                return;
+            }
+            variableCostsCache.forEach(cost => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex justify-between items-center p-3 bg-white rounded-md shadow-sm';
+                itemDiv.innerHTML = `
+                    <span>${cost.itemName}: ${formatCurrency(cost.itemValue)}</span>
+                    <button class="text-red-500 hover:text-red-700 text-sm font-medium" data-id="${cost.id}">Excluir</button>
+                `;
+                itemDiv.querySelector('button').onclick = async () => {
+                    showModal(
+                        'Confirmar Exclusão',
+                        `Tem certeza que deseja excluir o custo "${cost.itemName}"?`,
+                        async () => {
+                            try {
+                                await deleteDoc(doc(db, getUserDataPath('variableCosts'), cost.id));
+                                showCustomAlert('Custo variável excluído!', 'success');
+                                // onSnapshot irá atualizar a lista
+                            } catch (error) {
+                                console.error("Erro ao excluir custo variável:", error);
+                                showCustomAlert('Erro ao excluir. Tente novamente.', 'error');
+                            }
+                        },
+                        () => {}
+                    );
+                };
+                listDiv.appendChild(itemDiv);
+            });
+        }
+
+        // 3. Simulador de Frete
+        function renderFreightSimulatorSection() {
+            contentArea.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Simulador de Frete</h2>
+                <form id="freight-form" class="space-y-4">
+                    <div>
+                        <label for="totalFreightCost" class="block text-sm font-medium mb-1">Valor Total do Frete (R$):</label>
+                        <input type="text" id="totalFreightCost" inputmode="decimal" class="input-field" placeholder="Ex: 150,00" required>
+                    </div>
+                    <div>
+                        <label for="pairQuantity" class="block text-sm font-medium mb-1">Quantidade de Pares Comprados:</label>
+                        <input type="number" id="pairQuantity" class="input-field" placeholder="Ex: 30" required>
+                    </div>
+                    <button type="submit" class="btn-primary w-full sm:w-auto">Calcular Frete Unitário</button>
+                </form>
+                <div id="freight-result" class="mt-6 p-4 bg-[#e8e2f0] rounded-lg hidden">
+                    <p class="text-lg font-semibold">Custo Unitário do Frete por Par: <span id="unit-freight-cost" class="text-[#d295bf]"></span></p>
+                </div>
+            `;
+
+            const form = document.getElementById('freight-form');
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                const totalFreight = parseCurrency(document.getElementById('totalFreightCost').value);
+                const quantity = parseInt(document.getElementById('pairQuantity').value);
+
+                if (totalFreight > 0 && quantity > 0) {
+                    const unitCost = totalFreight / quantity;
+                    document.getElementById('unit-freight-cost').textContent = formatCurrency(unitCost);
+                    document.getElementById('freight-result').classList.remove('hidden');
+                } else {
+                    showCustomAlert('Por favor, insira valores válidos para frete e quantidade.', 'error');
+                    document.getElementById('freight-result').classList.add('hidden');
+                }
+            };
+            
+            document.getElementById('totalFreightCost').addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                 if (value) {
+                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+                } else {
+                    e.target.value = '';
+                }
+            });
+        }
+
+        // 4. Precificar Produto
+        function renderProductPricerSection() {
+            const totalFixed = fixedCostsCache.reduce((sum, cost) => sum + cost.costValue, 0);
+            const avgPairs = appSettingsCache.averageMonthlyPairsSold || 0;
+            const fixedCostPerPair = avgPairs > 0 ? totalFixed / avgPairs : 0;
+
+            let variableCostsOptionsHtml = '';
+            if (variableCostsCache.length > 0) {
+                variableCostsCache.forEach(vc => {
+                    variableCostsOptionsHtml += `
+                        <label class="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
+                            <input type="checkbox" name="variable_cost" value="${vc.itemValue}" data-name="${vc.itemName}" class="form-checkbox h-5 w-5 text-[#d295bf] rounded border-gray-300 focus:ring-[#d295bf]">
+                            <span>${vc.itemName} (${formatCurrency(vc.itemValue)})</span>
+                        </label>
+                    `;
+                });
+            } else {
+                variableCostsOptionsHtml = '<p class="text-sm text-gray-500">Nenhum custo variável cadastrado. Adicione na seção "Custos Variáveis".</p>';
+            }
+
+            contentArea.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Precificador de Produto</h2>
+                <form id="product-pricer-form" class="space-y-4">
+                    <div>
+                        <label for="purchasePrice" class="block text-sm font-medium mb-1">Valor Pago na Mercadoria (R$):</label>
+                        <input type="text" id="purchasePrice" inputmode="decimal" class="input-field" required>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="profitMarginType" class="block text-sm font-medium mb-1">Tipo de Margem de Lucro:</label>
+                            <select id="profitMarginType" class="input-field">
+                                <option value="percentage">Percentual (%)</option>
+                                <option value="fixed_value">Valor Fixo (R$)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="profitMarginValue" class="block text-sm font-medium mb-1">Margem de Lucro Desejada:</label>
+                            <input type="text" id="profitMarginValue" inputmode="decimal" class="input-field" required>
+                        </div>
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium mb-1">Custos Variáveis (selecione):</label>
+                        <div class="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1 bg-white">
+                            ${variableCostsOptionsHtml}
+                        </div>
+                    </div>
+                    <div>
+                        <label for="unitFreightPricer" class="block text-sm font-medium mb-1">Custo de Frete Unitário (R$):</label>
+                        <input type="text" id="unitFreightPricer" inputmode="decimal" class="input-field" placeholder="Calcule em 'Simular Frete' ou insira">
+                    </div>
+                    <div class="p-3 bg-[#f7e7df] rounded-md text-sm">
+                        Custo Fixo por Par (calculado): ${formatCurrency(fixedCostPerPair)}
+                        <input type="hidden" id="fixedCostPerPairPricer" value="${fixedCostPerPair}">
+                        ${avgPairs === 0 ? '<p class="text-red-500 text-xs mt-1">Defina a "Média de Pares Vendidos" em Custos Fixos para um cálculo preciso.</p>' : ''}
+                    </div>
+                    <button type="submit" class="btn-primary w-full">Calcular Preço de Venda</button>
+                </form>
+
+                <div id="pricing-result" class="mt-6 p-4 bg-[#e8e2f0] rounded-lg hidden">
+                    <h3 class="text-xl font-semibold mb-3 text-[#4b4b4b]">Resultado da Precificação:</h3>
+                    <p>Preço de Venda Sugerido: <strong id="sellingPrice" class="text-[#d295bf] text-lg"></strong></p>
+                    <p>Lucro Estimado por Par: <strong id="profitPerPair" class="text-green-600"></strong></p>
+                    <p>Percentual de Lucro sobre a Venda: <strong id="profitPercentage" class="text-green-600"></strong></p>
+                    <div id="profit-alert" class="mt-2 text-sm"></div>
+                </div>
+            `;
+            
+            ['purchasePrice', 'profitMarginValue', 'unitFreightPricer'].forEach(id => {
+                 document.getElementById(id)?.addEventListener('input', (e) => {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value) {
+                        const isPercentage = id === 'profitMarginValue' && document.getElementById('profitMarginType').value === 'percentage';
+                        if (!isPercentage) { // Não formata como moeda se for porcentagem pura
+                             value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                             e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+                        } else {
+                            e.target.value = value; // Mantém como número para %
+                        }
+                    } else {
+                        e.target.value = '';
+                    }
+                });
+            });
+            
+            // Ajustar máscara da margem de lucro ao mudar o tipo
+            document.getElementById('profitMarginType').addEventListener('change', (e) => {
+                const profitMarginInput = document.getElementById('profitMarginValue');
+                profitMarginInput.value = ''; // Limpa o valor ao trocar
+                // A lógica de máscara já lida com isso no evento 'input' do profitMarginValue
+            });
+
+
+            const form = document.getElementById('product-pricer-form');
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                const purchasePrice = parseCurrency(document.getElementById('purchasePrice').value);
+                const marginType = document.getElementById('profitMarginType').value;
+                let marginValue = parseFloat(document.getElementById('profitMarginValue').value.replace(',', '.')); // Permitir vírgula para % também
+                if (marginType === 'fixed_value') {
+                    marginValue = parseCurrency(document.getElementById('profitMarginValue').value);
+                }
+
+                const selectedVariableCosts = Array.from(document.querySelectorAll('input[name="variable_cost"]:checked'))
+                                                 .reduce((sum, checkbox) => sum + parseFloat(checkbox.value), 0);
+                const unitFreight = parseCurrency(document.getElementById('unitFreightPricer').value) || 0;
+                const calculatedFixedCostPerPair = parseFloat(document.getElementById('fixedCostPerPairPricer').value);
+
+                if (purchasePrice <= 0 || marginValue <= 0) {
+                    showCustomAlert('Preencha o valor da mercadoria e a margem de lucro corretamente.', 'error');
+                    return;
+                }
+
+                const totalCostsBeforeMargin = purchasePrice + selectedVariableCosts + unitFreight + calculatedFixedCostPerPair;
+                let sellingPrice = 0;
+
+                if (marginType === 'percentage') {
+                    if (marginValue >= 100) {
+                        showCustomAlert('A margem de lucro percentual não pode ser 100% ou mais neste cálculo.', 'error');
+                        return;
+                    }
+                    sellingPrice = totalCostsBeforeMargin / (1 - (marginValue / 100));
+                } else { // fixed_value
+                    sellingPrice = totalCostsBeforeMargin + marginValue;
+                }
+
+                const profitPerPair = sellingPrice - totalCostsBeforeMargin;
+                const profitPercentage = (sellingPrice > 0) ? (profitPerPair / sellingPrice) * 100 : 0;
+
+                document.getElementById('sellingPrice').textContent = formatCurrency(sellingPrice);
+                document.getElementById('profitPerPair').textContent = formatCurrency(profitPerPair);
+                document.getElementById('profitPercentage').textContent = profitPercentage.toFixed(2) + '%';
+                
+                const profitAlert = document.getElementById('profit-alert');
+                if (profitPerPair <= 0) {
+                    profitAlert.innerHTML = '<span class="text-red-600 font-semibold">Atenção: Este preço resulta em prejuízo ou lucro zero!</span>';
+                } else if (profitPercentage < 15) { // Exemplo de alerta para lucro baixo
+                    profitAlert.innerHTML = '<span class="text-orange-500 font-semibold">Alerta: Lucro baixo. Considere revisar seus custos ou margem.</span>';
+                } else {
+                     profitAlert.innerHTML = '<span class="text-green-600">Lucro adequado.</span>';
+                }
+
+                document.getElementById('pricing-result').classList.remove('hidden');
+            };
+        }
+
+        // 5. Entradas e Saídas (Transações)
+        async function renderTransactionsSection() {
+            contentArea.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Entradas e Saídas</h2>
+                <form id="transaction-form" class="mb-8 p-6 bg-white rounded-lg shadow space-y-4">
+                    <div>
+                        <label for="transactionType" class="block text-sm font-medium mb-1">Tipo:</label>
+                        <select id="transactionType" class="input-field">
+                            <option value="entrada">Entrada (Venda)</option>
+                            <option value="saida">Saída (Gasto)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="transactionDate" class="block text-sm font-medium mb-1">Data:</label>
+                        <input type="date" id="transactionDate" class="input-field" value="${new Date().toISOString().split('T')[0]}" required>
+                    </div>
+                    <div>
+                        <label for="transactionAmount" class="block text-sm font-medium mb-1">Valor (R$):</label>
+                        <input type="text" id="transactionAmount" inputmode="decimal" class="input-field" required>
+                    </div>
+                    <div>
+                        <label for="transactionDescription" class="block text-sm font-medium mb-1">Descrição:</label>
+                        <input type="text" id="transactionDescription" class="input-field" placeholder="Ex: Venda Sandália X, Compra de embalagens" required>
+                    </div>
+                    <button type="submit" class="btn-primary w-full sm:w-auto">Adicionar Transação</button>
+                </form>
+
+                <h3 class="text-xl font-medium mb-3">Histórico de Transações</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white rounded-lg shadow table-zebra">
+                        <thead class="bg-[#e8e2f0]">
+                            <tr>
+                                <th class="p-3 text-left text-sm font-semibold text-gray-700">Data</th>
+                                <th class="p-3 text-left text-sm font-semibold text-gray-700">Tipo</th>
+                                <th class="p-3 text-left text-sm font-semibold text-gray-700">Descrição</th>
+                                <th class="p-3 text-right text-sm font-semibold text-gray-700">Valor</th>
+                                <th class="p-3 text-center text-sm font-semibold text-gray-700">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-list">
+                            </tbody>
+                    </table>
+                </div>
+                 <div id="transactions-summary" class="mt-6 p-4 bg-[#e8e2f0] rounded-lg">
+                    <p class="text-lg font-semibold">Saldo do Período (listado): <span id="period-balance" class="text-[#d295bf]">R$ 0,00</span></p>
+                </div>
+            `;
+
+            const form = document.getElementById('transaction-form');
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const type = document.getElementById('transactionType').value;
+                const dateStr = document.getElementById('transactionDate').value;
+                const amount = parseCurrency(document.getElementById('transactionAmount').value);
+                const description = document.getElementById('transactionDescription').value.trim();
+
+                if (!dateStr || amount <= 0 || !description) {
+                    showCustomAlert('Preencha todos os campos da transação corretamente.', 'error');
+                    return;
+                }
+                // Converter data string para Timestamp do Firebase
+                const dateParts = dateStr.split('-'); // YYYY-MM-DD
+                const date = Timestamp.fromDate(new Date(dateParts[0], dateParts[1] - 1, dateParts[2]));
+
+
+                try {
+                    await addDoc(collection(db, getUserDataPath('transactions')), {
+                        type,
+                        date,
+                        amount,
+                        description,
+                        createdAt: Timestamp.now() // Para ordenação interna se necessário
+                    });
+                    showCustomAlert('Transação adicionada!', 'success');
+                    form.reset();
+                    document.getElementById('transactionDate').value = new Date().toISOString().split('T')[0]; // Reset data para hoje
+                } catch (error) {
+                    console.error("Erro ao adicionar transação:", error);
+                    showCustomAlert('Erro ao adicionar transação. Tente novamente.', 'error');
+                }
+            };
+            
+            document.getElementById('transactionAmount').addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                 if (value) {
+                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+                } else {
+                    e.target.value = '';
+                }
+            });
+
+            updateTransactionsList();
+        }
+        
+        function updateTransactionsList() {
+            const listBody = document.getElementById('transactions-list');
+            const balanceEl = document.getElementById('period-balance');
+            if (!listBody) return;
+
+            listBody.innerHTML = '';
+            let currentBalance = 0;
+
+            if (transactionsCache.length === 0) {
+                listBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">Nenhuma transação registrada.</td></tr>';
+                if(balanceEl) balanceEl.textContent = formatCurrency(0);
+                return;
+            }
+
+            transactionsCache.forEach(tx => {
+                const tr = document.createElement('tr');
+                const txDate = tx.date instanceof Timestamp ? tx.date.toDate() : new Date(tx.date);
+                const formattedDate = txDate.toLocaleDateString('pt-BR');
+                
+                const amountDisplay = tx.type === 'entrada' ? formatCurrency(tx.amount) : `-${formatCurrency(tx.amount)}`;
+                const amountColor = tx.type === 'entrada' ? 'text-green-600' : 'text-red-600';
+
+                if (tx.type === 'entrada') {
+                    currentBalance += tx.amount;
+                } else {
+                    currentBalance -= tx.amount;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-3 text-sm">${formattedDate}</td>
+                    <td class="p-3 text-sm capitalize">${tx.type}</td>
+                    <td class="p-3 text-sm">${tx.description}</td>
+                    <td class="p-3 text-sm text-right ${amountColor} font-medium">${amountDisplay}</td>
+                    <td class="p-3 text-center">
+                        <button class="text-red-500 hover:text-red-700 text-xs font-medium" data-id="${tx.id}">Excluir</button>
+                    </td>
+                `;
+                tr.querySelector('button').onclick = async () => {
+                     showModal(
+                        'Confirmar Exclusão',
+                        `Tem certeza que deseja excluir a transação "${tx.description}"?`,
+                        async () => {
+                            try {
+                                await deleteDoc(doc(db, getUserDataPath('transactions'), tx.id));
+                                showCustomAlert('Transação excluída!', 'success');
+                                // onSnapshot irá atualizar
+                            } catch (error) {
+                                console.error("Erro ao excluir transação:", error);
+                                showCustomAlert('Erro ao excluir. Tente novamente.', 'error');
+                            }
+                        },
+                        () => {}
+                    );
+                };
+                listBody.appendChild(tr);
+            });
+            if(balanceEl) balanceEl.textContent = formatCurrency(currentBalance);
+        }
+
+
+        // 6. Dashboard Resumo
+        async function renderDashboardSection() {
+            contentArea.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Dashboard Resumo Mensal</h2>
+                <div id="dashboard-content" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card p-5 bg-[#f7e7df]">
+                        <h3 class="font-semibold text-lg mb-2 text-[#d295bf]">Lucro Líquido do Mês</h3>
+                        <p id="monthly-net-profit" class="text-3xl font-bold text-green-600">R$ 0,00</p>
+                    </div>
+                    <div class="card p-5">
+                        <h3 class="font-semibold text-lg mb-1">Total Vendido no Mês</h3>
+                        <p id="monthly-total-sales" class="text-2xl font-bold">R$ 0,00</p>
+                    </div>
+                    <div class="card p-5">
+                        <h3 class="font-semibold text-lg mb-1">Total de Custos/Saídas no Mês</h3>
+                        <p id="monthly-total-expenses" class="text-2xl font-bold">R$ 0,00</p>
+                    </div>
+                    <div class="card p-5">
+                        <h3 class="font-semibold text-lg mb-1">Total de Pares Vendidos (Estimado)</h3>
+                        <p id="monthly-pairs-sold" class="text-2xl font-bold">0</p>
+                        <small class="text-xs text-gray-500">Baseado em transações de entrada.</small>
+                    </div>
+                     <div class="card p-5 md:col-span-2">
+                        <h3 class="font-semibold text-lg mb-1">Valor Médio por Venda</h3>
+                        <p id="monthly-avg-sale-value" class="text-2xl font-bold">R$ 0,00</p>
+                    </div>
+                </div>
+                <p class="mt-6 text-sm text-gray-500 text-center">Dados referentes ao mês atual.</p>
+            `;
+            updateDashboardData();
+        }
+        
+        function updateDashboardData() {
+            if (!document.getElementById('dashboard-content')) return; // Só atualiza se o dashboard estiver visível
+
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            const monthlyTransactions = transactionsCache.filter(tx => {
+                const txDate = tx.date instanceof Timestamp ? tx.date.toDate() : new Date(tx.date);
+                return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+            });
+
+            let totalSales = 0;
+            let totalExpenses = 0;
+            let salesCount = 0;
+
+            monthlyTransactions.forEach(tx => {
+                if (tx.type === 'entrada') {
+                    totalSales += tx.amount;
+                    salesCount++;
+                } else {
+                    totalExpenses += tx.amount;
+                }
+            });
+
+            const netProfit = totalSales - totalExpenses;
+            const avgSaleValue = salesCount > 0 ? totalSales / salesCount : 0;
+
+            // Estimativa de pares vendidos: assumindo que cada transação de entrada é um par. 
+            // Isso é uma simplificação. Para ser mais preciso, o usuário teria que registrar os pares.
+            const pairsSoldCount = salesCount; 
+
+            document.getElementById('monthly-net-profit').textContent = formatCurrency(netProfit);
+            document.getElementById('monthly-total-sales').textContent = formatCurrency(totalSales);
+            document.getElementById('monthly-total-expenses').textContent = formatCurrency(totalExpenses);
+            document.getElementById('monthly-pairs-sold').textContent = pairsSoldCount;
+            document.getElementById('monthly-avg-sale-value').textContent = formatCurrency(avgSaleValue);
+        }
+
+        // --- Inicialização ---
+        function init() {
+            // A autenticação já chama renderMenu e loadInitialData
+            // Se precisar de algo mais na inicialização, coloque aqui.
+            // Por exemplo, se a primeira view não for o menu:
+            if (isAuthReady) { // Garante que só roda se auth estiver ok
+                renderMenu();
+                contentArea.innerHTML = `<p class="text-center text-gray-500">Bem-vinda à Precyz! Selecione uma opção do menu para começar.</p>`;
+            }
+        }
+        
+        // Chama init quando o DOM estiver pronto, mas a autenticação pode demorar mais.
+        // A lógica de onAuthStateChanged já lida com o fluxo pós-autenticação.
+        document.addEventListener('DOMContentLoaded', () => {
+             // A autenticação é assíncrona, então renderMenu() e loadInitialData() são chamados dentro de onAuthStateChanged.
+             // Apenas uma mensagem inicial pode ser colocada aqui, se necessário.
+             console.log("DOM carregado. Aguardando Firebase Auth...");
+        });
+
+    </script>
+</body>
+</html>
