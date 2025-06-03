@@ -22,30 +22,20 @@ import {
     setLogLevel
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// ************************************************************************************
-// ** IMPORTANTE: SUBSTITUA ESTA CONFIGURAÇÃO PELAS CREDENCIAIS DO SEU PROJETO FIREBASE **
-// ************************************************************************************
+// Configuração do Firebase fornecida pelo utilizador
 const firebaseConfig = {
-    apiKey: "COLOQUE_SUA_API_KEY_AQUI",
-    authDomain: "SEU_PROJETO.firebaseapp.com",
-    projectId: "SEU_PROJECT_ID",
-    storageBucket: "SEU_PROJETO.appspot.com",
-    messagingSenderId: "SEU_SENDER_ID",
-    appId: "SEU_APP_ID"
-    // measurementId: "SEU_MEASUREMENT_ID" // Opcional
+  apiKey: "AIzaSyBWTcv054S2n26C66L0PcZ3P4mH--cAeKg",
+  authDomain: "precyz-afe2b.firebaseapp.com",
+  projectId: "precyz-afe2b",
+  storageBucket: "precyz-afe2b.firebasestorage.app",
+  messagingSenderId: "1076170617285",
+  appId: "1:1076170617285:web:bdf0191f85ed4ea0dedbac",
+  measurementId: "G-29Y2GF7PPV"
 };
 
 const appId = 'precyz-app';
 
-// Verifica se a configuração de placeholder ainda está presente
-if (firebaseConfig.apiKey === "COLOQUE_SUA_API_KEY_AQUI") {
-    console.warn("ATENÇÃO: A configuração do Firebase precisa ser preenchida com as suas credenciais reais para funcionar em produção!");
-    // Opcional: Mostrar um alerta visual para o usuário final em produção,
-    // mas é mais um aviso para o desenvolvedor durante o desenvolvimento.
-    // showCustomAlert("Configuração do Firebase pendente. A aplicação pode não funcionar corretamente.", "error", 10000);
-}
-
-setLogLevel('debug'); // Para logs detalhados do Firestore no console
+setLogLevel('debug'); 
 
 // Inicialização do Firebase
 let app;
@@ -58,7 +48,6 @@ try {
     authInstance = getAuth(app);
 } catch (error) {
     console.error("Erro ao inicializar o Firebase:", error);
-    // Tenta mostrar o alerta, mas pode falhar se a UI ainda não estiver pronta.
     const caContainer = document.getElementById('custom-alert-container');
     if (caContainer) {
        showCustomAlert(`Erro crítico ao inicializar o Firebase: ${error.message}. Verifique a configuração.`, 'error', 20000);
@@ -76,7 +65,7 @@ const menuContainer = document.getElementById('menu-container');
 const contentArea = document.getElementById('content-area');
 const userIdDisplay = document.getElementById('user-id-display');
 const authStatusDisplay = document.getElementById('auth-status');
-const customAlertContainer = document.getElementById('custom-alert-container'); // Já definido acima
+const customAlertContainer = document.getElementById('custom-alert-container');
 const currentYearSpan = document.getElementById('current-year');
 if(currentYearSpan) currentYearSpan.textContent = new Date().getFullYear();
 
@@ -119,7 +108,7 @@ if (db) {
 
 // --- Funções Auxiliares ---
 function showCustomAlert(message, type = 'info', duration = 3000) {
-    if (!customAlertContainer) { // Verifica se o container existe
+    if (!customAlertContainer) { 
         console.warn("Container de alerta não encontrado. Alerta no console:", message);
         return;
     }
@@ -191,9 +180,10 @@ function formatCurrency(value) {
 
 function parseCurrency(value) {
     if (typeof value !== 'string') return value;
-    const cleanedValue = value.replace(/\R\$\s?/, '').replace(/\./g, '').replace(',', '.');
+    const cleanedValue = value.replace(/R\$\s?/, '').replace(/\./g, '').replace(',', '.');
     return parseFloat(cleanedValue) || 0;
 }
+
 
 // --- Estrutura do Menu ---
 const menuItems = [
@@ -297,12 +287,10 @@ async function loadInitialData() {
 }
 
 function applyCurrencyMask(event) {
-    let value = event.target.value.replace(/\D/g, '');
+    let value = event.target.value.replace(/\D/g, ''); 
     if (value) {
-        // Converte para número, divide por 100 e formata para duas casas decimais
         let numValue = parseInt(value) / 100;
-        // Formata para o padrão brasileiro (vírgula como decimal, ponto como milhar)
-        event.target.value = numValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace('R$', '').trim();
+        event.target.value = numValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     } else {
         event.target.value = '';
     }
@@ -345,7 +333,7 @@ async function renderFixedCostsSection() {
         if (!nameInput || !valueInput) return;
 
         const name = nameInput.value.trim();
-        const value = parseCurrency(valueInput.value);
+        const value = parseCurrency(valueInput.value); 
         if (name && value > 0) {
             try {
                 await addDoc(collection(db, getUserDataPath('fixedCosts')), { costName: name, costValue: value });
@@ -641,8 +629,6 @@ function renderProductPricerSection() {
     if(profitMarginValueInput && profitMarginTypeSelect) {
         profitMarginValueInput.addEventListener('input', (e) => {
             if (profitMarginTypeSelect.value === 'percentage') {
-                // Para percentual, permite números, vírgula e ponto.
-                // Remove caracteres não numéricos, exceto vírgula e ponto.
                 e.target.value = e.target.value.replace(/[^\d,.]/g, ''); 
             } else {
                 applyCurrencyMask(e);
@@ -650,13 +636,10 @@ function renderProductPricerSection() {
         });
         profitMarginTypeSelect.addEventListener('change', () => {
             profitMarginValueInput.value = '';
-            // Dispara um evento de input para que a máscara (ou a falta dela) seja reavaliada
             profitMarginValueInput.dispatchEvent(new Event('input', { bubbles: true }));
         });
-         // Inicializa a máscara correta ao carregar
         profitMarginValueInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
-
 
     const form = document.getElementById('product-pricer-form');
     if(form) form.onsubmit = (e) => {
@@ -668,7 +651,6 @@ function renderProductPricerSection() {
         let marginValue;
 
         if (marginType === 'percentage') {
-            // Para percentual, substitui vírgula por ponto para parseFloat
             marginValue = parseFloat(marginValueStr.replace(',', '.')) || 0;
         } else {
             marginValue = parseCurrency(marginValueStr);
@@ -947,9 +929,6 @@ function updateDashboardData() {
 }
 
 // --- Inicialização ---
-// Adiciona um listener para garantir que o DOM está carregado antes de tentar manipular elementos
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM carregado. Aguardando Firebase Auth...");
-    // A lógica de autenticação e renderização inicial do menu é disparada por onAuthStateChanged.
-    // Se o Firebase não inicializar, os alertas e logs no console indicarão o problema.
 });
