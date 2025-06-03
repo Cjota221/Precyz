@@ -141,10 +141,8 @@
         import { 
             getAuth, 
             signInAnonymously, 
-            signInWithCustomToken, 
-            onAuthStateChanged,
-            setPersistence,
-            browserLocalPersistence 
+            // signInWithCustomToken, // Não será usado diretamente em produção no Netlify sem um backend seguro
+            onAuthStateChanged
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
             getFirestore, 
@@ -157,23 +155,68 @@
             onSnapshot, 
             collection, 
             query, 
-            where, 
+            // where, // Removido se não for usado, para diminuir o tamanho do bundle
             getDocs,
             Timestamp,
             enableIndexedDbPersistence,
             setLogLevel
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuração do Firebase (será preenchida pelo ambiente Canvas)
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "DEMO_KEY", authDomain: "DEMO.firebaseapp.com", projectId: "DEMO-PROJECT" };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'precyz-app'; // Nome da App alterado para Precyz
+        // ************************************************************************************
+        // ** IMPORTANTE: SUBSTITUA ESTA CONFIGURAÇÃO PELAS CREDENCIAIS DO SEU PROJETO FIREBASE **
+        // ************************************************************************************
+        // Obtenha esta configuração no console do Firebase ao adicionar um app da Web ao seu projeto.
+        // Exemplo:
+        // const firebaseConfig = {
+        //   apiKey: "SUA_API_KEY",
+        //   authDomain: "SEU_AUTH_DOMAIN.firebaseapp.com",
+        //   projectId: "SEU_PROJECT_ID",
+        //   storageBucket: "SEU_STORAGE_BUCKET.appspot.com",
+        //   messagingSenderId: "SEU_MESSAGING_SENDER_ID",
+        //   appId: "SEU_APP_ID",
+        //   measurementId: "SEU_MEASUREMENT_ID" // Opcional, para Analytics
+        // };
+
+        // Configuração de fallback para o ambiente Canvas (se __firebase_config for fornecido)
+        // ou um placeholder para o utilizador preencher para produção.
+        const providedFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        const firebaseConfig = providedFirebaseConfig || {
+            apiKey: "COLOQUE_SUA_API_KEY_AQUI",
+            authDomain: "SEU_PROJETO.firebaseapp.com",
+            projectId: "SEU_PROJECT_ID",
+            storageBucket: "SEU_PROJETO.appspot.com",
+            messagingSenderId: "SEU_SENDER_ID",
+            appId: "SEU_APP_ID"
+            // measurementId: "SEU_MEASUREMENT_ID" // Opcional
+        };
         
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'precyz-app'; 
+        
+        // Verifica se a configuração de placeholder ainda está presente em ambiente de produção (não Canvas)
+        if (!providedFirebaseConfig && firebaseConfig.apiKey === "COLOQUE_SUA_API_KEY_AQUI") {
+            console.warn("ATENÇÃO: A configuração do Firebase precisa ser preenchida com as suas credenciais reais para funcionar em produção!");
+            // Poderia mostrar um alerta visual para o utilizador final, mas é mais um aviso para o desenvolvedor.
+        }
+
         setLogLevel('debug'); // Para logs detalhados do Firestore no console
 
         // Inicialização do Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        let app;
+        let db;
+        let authInstance; // Renomeado para evitar conflito com a variável auth global do browser
+
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            authInstance = getAuth(app); // Usar a instância local
+        } catch (error) {
+            console.error("Erro ao inicializar o Firebase:", error);
+            showCustomAlert(`Erro crítico ao inicializar o Firebase: ${error.message}. Verifique a configuração.`, 'error', 20000);
+            // Impede a continuação se o Firebase não puder ser inicializado
+            throw error; 
+        }
+
 
         let userId = null;
         let isAuthReady = false;
@@ -185,49 +228,47 @@
         const authStatusDisplay = document.getElementById('auth-status');
         const customAlertContainer = document.getElementById('custom-alert-container');
         const currentYearSpan = document.getElementById('current-year');
-        currentYearSpan.textContent = new Date().getFullYear();
+        if(currentYearSpan) currentYearSpan.textContent = new Date().getFullYear();
 
         // --- Autenticação ---
-        onAuthStateChanged(auth, async (user) => {
+        onAuthStateChanged(authInstance, async (user) => { // Usar authInstance
             if (user) {
                 userId = user.uid;
-                userIdDisplay.textContent = `ID Usuária: ${userId.substring(0,8)}...`; // Mostrar parte do ID
-                authStatusDisplay.textContent = "Status: Autenticada.";
+                if(userIdDisplay) userIdDisplay.textContent = `ID Usuária: ${userId.substring(0,8)}...`;
+                if(authStatusDisplay) authStatusDisplay.textContent = "Status: Autenticada.";
                 console.log("Usuário autenticado:", userId);
                 isAuthReady = true;
-                loadInitialData(); // Carregar dados após autenticação
+                loadInitialData(); 
             } else {
-                authStatusDisplay.textContent = "Status: Autenticando...";
-                console.log("Nenhum usuário autenticado, tentando login anônimo ou com token.");
+                if(authStatusDisplay) authStatusDisplay.textContent = "Status: Autenticando...";
+                console.log("Nenhum usuário autenticado, tentando login anônimo.");
                 try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                        console.log("Login com Custom Token bem-sucedido.");
-                    } else {
-                        await signInAnonymously(auth);
-                        console.log("Login anônimo bem-sucedido.");
-                    }
-                    // O listener onAuthStateChanged será chamado novamente após o login
+                    // No ambiente de produção (Netlify), __initial_auth_token não estará disponível.
+                    // Portanto, o login anónimo será a principal forma de autenticação.
+                    await signInAnonymously(authInstance); // Usar authInstance
+                    console.log("Login anónimo solicitado.");
+                    // O listener onAuthStateChanged será chamado novamente após o login bem-sucedido.
                 } catch (error) {
-                    console.error("Erro na autenticação:", error);
-                    userIdDisplay.textContent = "Erro de autenticação.";
-                    authStatusDisplay.textContent = "Status: Falha na autenticação.";
-                    isAuthReady = false; // Marcar como não pronto se falhar
-                    showCustomAlert(`Falha na autenticação: ${error.message}. Verifique a configuração do Firebase.`, 'error', 10000);
+                    console.error("Erro no login anónimo:", error);
+                    if(userIdDisplay) userIdDisplay.textContent = "Erro de autenticação.";
+                    if(authStatusDisplay) authStatusDisplay.textContent = "Status: Falha na autenticação.";
+                    isAuthReady = false; 
+                    showCustomAlert(`Falha na autenticação: ${error.message}. Verifique a configuração do Firebase e se o login anónimo está ativado.`, 'error', 10000);
                 }
             }
-            renderMenu(); // Renderizar menu após tentativa de auth
+            renderMenu(); 
         });
         
-        // Tentar habilitar persistência offline
-        enableIndexedDbPersistence(db)
-        .catch((err) => {
-            if (err.code == 'failed-precondition') {
-                console.warn("Persistência do Firestore: Múltiplas abas abertas, persistência pode não estar habilitada.");
-            } else if (err.code == 'unimplemented') {
-                console.warn("Persistência do Firestore: Navegador não suporta persistência offline.");
-            }
-        });
+        if (db) { // Apenas tenta habilitar persistência se o db foi inicializado
+            enableIndexedDbPersistence(db)
+            .catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.warn("Persistência do Firestore: Múltiplas abas abertas, persistência pode não estar habilitada.");
+                } else if (err.code == 'unimplemented') {
+                    console.warn("Persistência do Firestore: Navegador não suporta persistência offline.");
+                }
+            });
+        }
 
 
         // --- Funções Auxiliares ---
@@ -237,7 +278,7 @@
             alertDiv.id = alertId;
             alertDiv.className = `custom-alert alert-${type}`;
             alertDiv.textContent = message;
-            customAlertContainer.appendChild(alertDiv);
+            if(customAlertContainer) customAlertContainer.appendChild(alertDiv);
 
             setTimeout(() => {
                 const activeAlert = document.getElementById(alertId);
@@ -249,12 +290,17 @@
         
         function showModal(title, message, onConfirm, onCancel) {
             const modal = document.getElementById('modal-template');
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').innerHTML = message; // Usar innerHTML para permitir HTML na mensagem
+            if (!modal) return;
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
             const confirmBtn = document.getElementById('modal-confirm-btn');
             const cancelBtn = document.getElementById('modal-cancel-btn');
 
-            // Remover event listeners antigos para evitar múltiplas execuções
+            if(modalTitle) modalTitle.textContent = title;
+            if(modalMessage) modalMessage.innerHTML = message; 
+            
+            if (!confirmBtn || !cancelBtn) return;
+
             const newConfirmBtn = confirmBtn.cloneNode(true);
             confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
             
@@ -279,7 +325,7 @@
                     modal.classList.add('hidden');
                 };
             } else {
-                 newCancelBtn.textContent = "Fechar"; // Se não houver onCancel, o botão apenas fecha
+                 newCancelBtn.textContent = "Fechar";
                  newCancelBtn.onclick = () => modal.classList.add('hidden');
             }
             
@@ -295,9 +341,11 @@
         }
 
         function parseCurrency(value) {
-            if (typeof value !== 'string') return value;
-            return parseFloat(value.replace(/\R\$\s?/, '').replace(/\./g, '').replace(',', '.')) || 0;
+            if (typeof value !== 'string') return value; // Se já for número, retorna
+            const cleanedValue = value.replace(/\R\$\s?/, '').replace(/\./g, '').replace(',', '.');
+            return parseFloat(cleanedValue) || 0;
         }
+
 
         // --- Estrutura do Menu ---
         const menuItems = [
@@ -310,16 +358,16 @@
         ];
 
         function renderMenu() {
-            menuContainer.innerHTML = ''; // Limpa o menu existente
-            if (!isAuthReady && !(typeof __initial_auth_token === 'undefined' && !__initial_auth_token)) { // Se não estiver autenticado e não for o caso de login anônimo inicial
-                 // Não renderiza o menu se a autenticação ainda não estiver pronta ou falhou (exceto no primeiro load anônimo)
+            if (!menuContainer || !contentArea) return;
+            menuContainer.innerHTML = ''; 
+            if (!isAuthReady) { 
                 contentArea.innerHTML = `<p class="text-center text-gray-500">Aguardando autenticação para carregar as funcionalidades...</p>`;
                 return;
             }
 
             menuItems.forEach(item => {
                 const card = document.createElement('div');
-                card.className = 'card p-5 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#f7e7df]'; // Nude rosado no hover
+                card.className = 'card p-5 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#f7e7df]';
                 card.innerHTML = `
                     <span class="text-3xl mb-2">${item.icon}</span>
                     <h3 class="font-semibold text-lg text-[#d295bf]">${item.title}</h3>
@@ -337,18 +385,15 @@
         }
         
         function setActiveCard(selectedCard) {
-            // Remove a classe 'active' de todos os cards
+            if (!menuContainer) return;
             const allCards = menuContainer.querySelectorAll('.card');
             allCards.forEach(card => card.classList.remove('ring-2', 'ring-[#d295bf]'));
-            // Adiciona a classe 'active' ao card selecionado
             if (selectedCard) {
                 selectedCard.classList.add('ring-2', 'ring-[#d295bf]');
             }
         }
 
         // --- Funções de Seção ---
-
-        // Base path for user data
         const getUserDataPath = (collectionName) => `artifacts/${appId}/users/${userId}/${collectionName}`;
         const getAppSettingsPath = () => `artifacts/${appId}/users/${userId}/settings/appSettings`;
 
@@ -358,59 +403,65 @@
         let appSettingsCache = { averageMonthlyPairsSold: 0 };
 
         async function loadInitialData() {
-            if (!isAuthReady || !userId) return;
+            if (!isAuthReady || !userId || !db) {
+                console.log("Não é possível carregar dados: Autenticação não pronta, ID do utilizador ou DB não disponível.");
+                return;
+            }
 
-            // Carregar Configurações do App (averageMonthlyPairsSold)
             const appSettingsRef = doc(db, getAppSettingsPath());
             onSnapshot(appSettingsRef, (docSnap) => {
                 if (docSnap.exists()) {
                     appSettingsCache = docSnap.data();
                 } else {
-                    appSettingsCache = { averageMonthlyPairsSold: 0 }; // Default
-                    setDoc(appSettingsRef, appSettingsCache); // Cria se não existir
+                    appSettingsCache = { averageMonthlyPairsSold: 0 }; 
+                    setDoc(appSettingsRef, appSettingsCache).catch(e => console.error("Erro ao criar configurações:", e));
                 }
-                // Se alguma seção estiver ativa e depender disso, pode precisar de re-render.
-                // Ex: se a seção de precificação estiver aberta.
                 const activePricer = document.getElementById('product-pricer-form');
-                if (activePricer) renderProductPricerSection(); // Re-renderiza se estiver aberta
+                if (activePricer) renderProductPricerSection(); 
             }, error => console.error("Erro ao carregar configurações:", error));
 
-            // Carregar Custos Fixos
             const fixedCostsQuery = query(collection(db, getUserDataPath('fixedCosts')));
             onSnapshot(fixedCostsQuery, (snapshot) => {
                 fixedCostsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const activeFixedCosts = document.getElementById('fixed-costs-list');
-                if (activeFixedCosts) renderFixedCostsSection(); // Re-renderiza se estiver aberta
+                if (document.getElementById('fixed-costs-list')) renderFixedCostsSection();
+                if (document.getElementById('product-pricer-form')) renderProductPricerSection(); // Recalcula precificador
+                if (document.getElementById('dashboard-content')) updateDashboardData(); // Atualiza dashboard
             }, error => console.error("Erro ao carregar custos fixos:", error));
 
-            // Carregar Custos Variáveis
             const variableCostsQuery = query(collection(db, getUserDataPath('variableCosts')));
             onSnapshot(variableCostsQuery, (snapshot) => {
                 variableCostsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const activeVariableCosts = document.getElementById('variable-costs-list');
-                if (activeVariableCosts) renderVariableCostsSection(); // Re-renderiza se estiver aberta
+                if (document.getElementById('variable-costs-list')) renderVariableCostsSection();
+                if (document.getElementById('product-pricer-form')) renderProductPricerSection(); // Recalcula precificador
             }, error => console.error("Erro ao carregar custos variáveis:", error));
             
-            // Carregar Transações
-            const transactionsQuery = query(collection(db, getUserDataPath('transactions'))); // Poderia ordenar por data aqui
+            const transactionsQuery = query(collection(db, getUserDataPath('transactions')));
             onSnapshot(transactionsQuery, (snapshot) => {
                 transactionsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Ordenar transações por data (mais recentes primeiro)
                 transactionsCache.sort((a, b) => {
                     const dateA = a.date instanceof Timestamp ? a.date.toDate() : new Date(a.date);
                     const dateB = b.date instanceof Timestamp ? b.date.toDate() : new Date(b.date);
                     return dateB - dateA;
                 });
-                const activeTransactions = document.getElementById('transactions-list');
-                if (activeTransactions) renderTransactionsSection();
-                const activeDashboard = document.getElementById('dashboard-content');
-                if (activeDashboard) renderDashboardSection();
+                if (document.getElementById('transactions-list')) renderTransactionsSection();
+                if (document.getElementById('dashboard-content')) renderDashboardSection();
             }, error => console.error("Erro ao carregar transações:", error));
         }
 
+        // Função para aplicar máscara de moeda genérica
+        function applyCurrencyMask(event) {
+            let value = event.target.value.replace(/\D/g, '');
+            if (value) {
+                value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
+                event.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d),)/g, '$1.');
+            } else {
+                event.target.value = '';
+            }
+        }
 
         // 1. Custos Fixos
         async function renderFixedCostsSection() {
+            if (!contentArea) return;
             contentArea.innerHTML = `
                 <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Custos Fixos Mensais</h2>
                 <form id="fixed-cost-form" class="mb-6 space-y-4">
@@ -439,10 +490,14 @@
             `;
 
             const form = document.getElementById('fixed-cost-form');
-            form.onsubmit = async (e) => {
+            if(form) form.onsubmit = async (e) => {
                 e.preventDefault();
-                const name = document.getElementById('costName').value.trim();
-                const value = parseCurrency(document.getElementById('costValue').value);
+                const nameInput = document.getElementById('costName');
+                const valueInput = document.getElementById('costValue');
+                if (!nameInput || !valueInput) return;
+
+                const name = nameInput.value.trim();
+                const value = parseCurrency(valueInput.value);
                 if (name && value > 0) {
                     try {
                         await addDoc(collection(db, getUserDataPath('fixedCosts')), { costName: name, costValue: value });
@@ -458,7 +513,7 @@
             };
 
             const avgPairsInput = document.getElementById('avgPairsSold');
-            avgPairsInput.onchange = async (e) => {
+            if(avgPairsInput) avgPairsInput.onchange = async (e) => {
                 const newAvg = parseInt(e.target.value) || 0;
                 appSettingsCache.averageMonthlyPairsSold = newAvg;
                 try {
@@ -471,17 +526,8 @@
                 }
             };
             
-            // Input mask for currency
-            document.getElementById('costValue').addEventListener('input', (e) => {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value) {
-                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
-                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
-                } else {
-                    e.target.value = '';
-                }
-            });
-
+            const costValueInput = document.getElementById('costValue');
+            if(costValueInput) costValueInput.addEventListener('input', applyCurrencyMask);
 
             updateFixedCostList();
             updateFixedCostSummary();
@@ -493,6 +539,7 @@
             listDiv.innerHTML = '';
             if (fixedCostsCache.length === 0) {
                 listDiv.innerHTML = '<p class="text-gray-500">Nenhum custo fixo cadastrado.</p>';
+                updateFixedCostSummary(); // Garante que o sumário zere
                 return;
             }
             fixedCostsCache.forEach(cost => {
@@ -502,7 +549,8 @@
                     <span>${cost.costName}: ${formatCurrency(cost.costValue)}</span>
                     <button class="text-red-500 hover:text-red-700 text-sm font-medium" data-id="${cost.id}">Excluir</button>
                 `;
-                itemDiv.querySelector('button').onclick = async () => {
+                const deleteButton = itemDiv.querySelector('button');
+                if(deleteButton) deleteButton.onclick = async () => {
                      showModal(
                         'Confirmar Exclusão',
                         `Tem certeza que deseja excluir o custo "${cost.costName}"?`,
@@ -510,13 +558,12 @@
                             try {
                                 await deleteDoc(doc(db, getUserDataPath('fixedCosts'), cost.id));
                                 showCustomAlert('Custo fixo excluído!', 'success');
-                                // updateFixedCostList e updateFixedCostSummary serão chamados pelo onSnapshot
                             } catch (error) {
                                 console.error("Erro ao excluir custo fixo:", error);
                                 showCustomAlert('Erro ao excluir. Tente novamente.', 'error');
                             }
                         },
-                        () => {} // Ação para cancelar (nenhuma, apenas fecha o modal)
+                        () => {} 
                     );
                 };
                 listDiv.appendChild(itemDiv);
@@ -525,7 +572,7 @@
         }
 
         function updateFixedCostSummary() {
-            const totalCost = fixedCostsCache.reduce((sum, cost) => sum + cost.costValue, 0);
+            const totalCost = fixedCostsCache.reduce((sum, cost) => sum + (cost.costValue || 0), 0);
             const avgPairs = appSettingsCache.averageMonthlyPairsSold || 0;
             const costPerPair = avgPairs > 0 ? totalCost / avgPairs : 0;
 
@@ -537,6 +584,7 @@
 
         // 2. Custos Variáveis
         async function renderVariableCostsSection() {
+            if (!contentArea) return;
             contentArea.innerHTML = `
                 <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Custos Variáveis por Produto</h2>
                 <form id="variable-cost-form" class="mb-6 space-y-4">
@@ -556,10 +604,14 @@
             `;
 
             const form = document.getElementById('variable-cost-form');
-            form.onsubmit = async (e) => {
+            if(form) form.onsubmit = async (e) => {
                 e.preventDefault();
-                const name = document.getElementById('itemName').value.trim();
-                const value = parseCurrency(document.getElementById('itemValue').value);
+                const nameInput = document.getElementById('itemName');
+                const valueInput = document.getElementById('itemValue');
+                if (!nameInput || !valueInput) return;
+
+                const name = nameInput.value.trim();
+                const value = parseCurrency(valueInput.value);
                 if (name && value > 0) {
                      try {
                         await addDoc(collection(db, getUserDataPath('variableCosts')), { itemName: name, itemValue: value });
@@ -574,15 +626,8 @@
                 }
             };
             
-            document.getElementById('itemValue').addEventListener('input', (e) => {
-                let value = e.target.value.replace(/\D/g, '');
-                 if (value) {
-                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
-                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
-                } else {
-                    e.target.value = '';
-                }
-            });
+            const itemValueInput = document.getElementById('itemValue');
+            if(itemValueInput) itemValueInput.addEventListener('input', applyCurrencyMask);
 
             updateVariableCostList();
         }
@@ -602,7 +647,8 @@
                     <span>${cost.itemName}: ${formatCurrency(cost.itemValue)}</span>
                     <button class="text-red-500 hover:text-red-700 text-sm font-medium" data-id="${cost.id}">Excluir</button>
                 `;
-                itemDiv.querySelector('button').onclick = async () => {
+                const deleteButton = itemDiv.querySelector('button');
+                if(deleteButton) deleteButton.onclick = async () => {
                     showModal(
                         'Confirmar Exclusão',
                         `Tem certeza que deseja excluir o custo "${cost.itemName}"?`,
@@ -610,7 +656,6 @@
                             try {
                                 await deleteDoc(doc(db, getUserDataPath('variableCosts'), cost.id));
                                 showCustomAlert('Custo variável excluído!', 'success');
-                                // onSnapshot irá atualizar a lista
                             } catch (error) {
                                 console.error("Erro ao excluir custo variável:", error);
                                 showCustomAlert('Erro ao excluir. Tente novamente.', 'error');
@@ -625,6 +670,7 @@
 
         // 3. Simulador de Frete
         function renderFreightSimulatorSection() {
+            if (!contentArea) return;
             contentArea.innerHTML = `
                 <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Simulador de Frete</h2>
                 <form id="freight-form" class="space-y-4">
@@ -644,35 +690,36 @@
             `;
 
             const form = document.getElementById('freight-form');
-            form.onsubmit = (e) => {
+            if(form) form.onsubmit = (e) => {
                 e.preventDefault();
-                const totalFreight = parseCurrency(document.getElementById('totalFreightCost').value);
-                const quantity = parseInt(document.getElementById('pairQuantity').value);
+                const totalFreightInput = document.getElementById('totalFreightCost');
+                const quantityInput = document.getElementById('pairQuantity');
+                const unitFreightCostEl = document.getElementById('unit-freight-cost');
+                const freightResultEl = document.getElementById('freight-result');
+
+                if (!totalFreightInput || !quantityInput || !unitFreightCostEl || !freightResultEl) return;
+
+                const totalFreight = parseCurrency(totalFreightInput.value);
+                const quantity = parseInt(quantityInput.value);
 
                 if (totalFreight > 0 && quantity > 0) {
                     const unitCost = totalFreight / quantity;
-                    document.getElementById('unit-freight-cost').textContent = formatCurrency(unitCost);
-                    document.getElementById('freight-result').classList.remove('hidden');
+                    unitFreightCostEl.textContent = formatCurrency(unitCost);
+                    freightResultEl.classList.remove('hidden');
                 } else {
                     showCustomAlert('Por favor, insira valores válidos para frete e quantidade.', 'error');
-                    document.getElementById('freight-result').classList.add('hidden');
+                    freightResultEl.classList.add('hidden');
                 }
             };
             
-            document.getElementById('totalFreightCost').addEventListener('input', (e) => {
-                let value = e.target.value.replace(/\D/g, '');
-                 if (value) {
-                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
-                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
-                } else {
-                    e.target.value = '';
-                }
-            });
+            const totalFreightCostInput = document.getElementById('totalFreightCost');
+            if(totalFreightCostInput) totalFreightCostInput.addEventListener('input', applyCurrencyMask);
         }
 
         // 4. Precificar Produto
         function renderProductPricerSection() {
-            const totalFixed = fixedCostsCache.reduce((sum, cost) => sum + cost.costValue, 0);
+            if (!contentArea) return;
+            const totalFixed = fixedCostsCache.reduce((sum, cost) => sum + (cost.costValue || 0), 0);
             const avgPairs = appSettingsCache.averageMonthlyPairsSold || 0;
             const fixedCostPerPair = avgPairs > 0 ? totalFixed / avgPairs : 0;
 
@@ -722,7 +769,7 @@
                     </div>
                     <div class="p-3 bg-[#f7e7df] rounded-md text-sm">
                         Custo Fixo por Par (calculado): ${formatCurrency(fixedCostPerPair)}
-                        <input type="hidden" id="fixedCostPerPairPricer" value="${fixedCostPerPair}">
+                        <input type="hidden" id="fixedCostPerPairPricer" value="${fixedCostPerPair.toFixed(2)}">
                         ${avgPairs === 0 ? '<p class="text-red-500 text-xs mt-1">Defina a "Média de Pares Vendidos" em Custos Fixos para um cálculo preciso.</p>' : ''}
                     </div>
                     <button type="submit" class="btn-primary w-full">Calcular Preço de Venda</button>
@@ -737,45 +784,48 @@
                 </div>
             `;
             
-            ['purchasePrice', 'profitMarginValue', 'unitFreightPricer'].forEach(id => {
-                 document.getElementById(id)?.addEventListener('input', (e) => {
-                    let value = e.target.value.replace(/\D/g, '');
-                    if (value) {
-                        const isPercentage = id === 'profitMarginValue' && document.getElementById('profitMarginType').value === 'percentage';
-                        if (!isPercentage) { // Não formata como moeda se for porcentagem pura
-                             value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
-                             e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
-                        } else {
-                            e.target.value = value; // Mantém como número para %
-                        }
+            const purchasePriceInput = document.getElementById('purchasePrice');
+            const profitMarginValueInput = document.getElementById('profitMarginValue');
+            const unitFreightPricerInput = document.getElementById('unitFreightPricer');
+            const profitMarginTypeSelect = document.getElementById('profitMarginType');
+
+            if(purchasePriceInput) purchasePriceInput.addEventListener('input', applyCurrencyMask);
+            if(unitFreightPricerInput) unitFreightPricerInput.addEventListener('input', applyCurrencyMask);
+
+            if(profitMarginValueInput && profitMarginTypeSelect) {
+                profitMarginValueInput.addEventListener('input', (e) => {
+                    if (profitMarginTypeSelect.value === 'percentage') {
+                        // Sem máscara para percentual, apenas permite números
+                        e.target.value = e.target.value.replace(/[^\d,.]/g, ''); 
                     } else {
-                        e.target.value = '';
+                        applyCurrencyMask(e);
                     }
                 });
-            });
-            
-            // Ajustar máscara da margem de lucro ao mudar o tipo
-            document.getElementById('profitMarginType').addEventListener('change', (e) => {
-                const profitMarginInput = document.getElementById('profitMarginValue');
-                profitMarginInput.value = ''; // Limpa o valor ao trocar
-                // A lógica de máscara já lida com isso no evento 'input' do profitMarginValue
-            });
-
+                profitMarginTypeSelect.addEventListener('change', () => {
+                    profitMarginValueInput.value = ''; // Limpa ao trocar
+                    profitMarginValueInput.dispatchEvent(new Event('input')); // Força re-validação da máscara
+                });
+            }
 
             const form = document.getElementById('product-pricer-form');
-            form.onsubmit = (e) => {
+            if(form) form.onsubmit = (e) => {
                 e.preventDefault();
                 const purchasePrice = parseCurrency(document.getElementById('purchasePrice').value);
                 const marginType = document.getElementById('profitMarginType').value;
-                let marginValue = parseFloat(document.getElementById('profitMarginValue').value.replace(',', '.')); // Permitir vírgula para % também
-                if (marginType === 'fixed_value') {
-                    marginValue = parseCurrency(document.getElementById('profitMarginValue').value);
+                
+                let marginValueStr = document.getElementById('profitMarginValue').value;
+                let marginValue;
+
+                if (marginType === 'percentage') {
+                    marginValue = parseFloat(marginValueStr.replace(',', '.')) || 0;
+                } else {
+                    marginValue = parseCurrency(marginValueStr);
                 }
 
                 const selectedVariableCosts = Array.from(document.querySelectorAll('input[name="variable_cost"]:checked'))
                                                  .reduce((sum, checkbox) => sum + parseFloat(checkbox.value), 0);
                 const unitFreight = parseCurrency(document.getElementById('unitFreightPricer').value) || 0;
-                const calculatedFixedCostPerPair = parseFloat(document.getElementById('fixedCostPerPairPricer').value);
+                const calculatedFixedCostPerPair = parseFloat(document.getElementById('fixedCostPerPairPricer').value) || 0;
 
                 if (purchasePrice <= 0 || marginValue <= 0) {
                     showCustomAlert('Preencha o valor da mercadoria e a margem de lucro corretamente.', 'error');
@@ -791,32 +841,39 @@
                         return;
                     }
                     sellingPrice = totalCostsBeforeMargin / (1 - (marginValue / 100));
-                } else { // fixed_value
+                } else { 
                     sellingPrice = totalCostsBeforeMargin + marginValue;
                 }
 
                 const profitPerPair = sellingPrice - totalCostsBeforeMargin;
-                const profitPercentage = (sellingPrice > 0) ? (profitPerPair / sellingPrice) * 100 : 0;
+                const profitPercentage = (sellingPrice > 0 && sellingPrice !== Infinity) ? (profitPerPair / sellingPrice) * 100 : 0;
 
-                document.getElementById('sellingPrice').textContent = formatCurrency(sellingPrice);
-                document.getElementById('profitPerPair').textContent = formatCurrency(profitPerPair);
-                document.getElementById('profitPercentage').textContent = profitPercentage.toFixed(2) + '%';
+                const sellingPriceEl = document.getElementById('sellingPrice');
+                const profitPerPairEl = document.getElementById('profitPerPair');
+                const profitPercentageEl = document.getElementById('profitPercentage');
+                const profitAlertEl = document.getElementById('profit-alert');
+                const pricingResultEl = document.getElementById('pricing-result');
+
+                if(sellingPriceEl) sellingPriceEl.textContent = formatCurrency(sellingPrice);
+                if(profitPerPairEl) profitPerPairEl.textContent = formatCurrency(profitPerPair);
+                if(profitPercentageEl) profitPercentageEl.textContent = profitPercentage.toFixed(2) + '%';
                 
-                const profitAlert = document.getElementById('profit-alert');
-                if (profitPerPair <= 0) {
-                    profitAlert.innerHTML = '<span class="text-red-600 font-semibold">Atenção: Este preço resulta em prejuízo ou lucro zero!</span>';
-                } else if (profitPercentage < 15) { // Exemplo de alerta para lucro baixo
-                    profitAlert.innerHTML = '<span class="text-orange-500 font-semibold">Alerta: Lucro baixo. Considere revisar seus custos ou margem.</span>';
-                } else {
-                     profitAlert.innerHTML = '<span class="text-green-600">Lucro adequado.</span>';
+                if(profitAlertEl){
+                    if (profitPerPair <= 0 || sellingPrice === Infinity) {
+                        profitAlertEl.innerHTML = '<span class="text-red-600 font-semibold">Atenção: Este preço resulta em prejuízo ou lucro zero!</span>';
+                    } else if (profitPercentage < 15) { 
+                        profitAlertEl.innerHTML = '<span class="text-orange-500 font-semibold">Alerta: Lucro baixo. Considere revisar seus custos ou margem.</span>';
+                    } else {
+                         profitAlertEl.innerHTML = '<span class="text-green-600">Lucro adequado.</span>';
+                    }
                 }
-
-                document.getElementById('pricing-result').classList.remove('hidden');
+                if(pricingResultEl) pricingResultEl.classList.remove('hidden');
             };
         }
 
         // 5. Entradas e Saídas (Transações)
         async function renderTransactionsSection() {
+            if (!contentArea) return;
             contentArea.innerHTML = `
                 <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Entradas e Saídas</h2>
                 <form id="transaction-form" class="mb-8 p-6 bg-white rounded-lg shadow space-y-4">
@@ -854,8 +911,7 @@
                                 <th class="p-3 text-center text-sm font-semibold text-gray-700">Ações</th>
                             </tr>
                         </thead>
-                        <tbody id="transactions-list">
-                            </tbody>
+                        <tbody id="transactions-list"></tbody>
                     </table>
                 </div>
                  <div id="transactions-summary" class="mt-6 p-4 bg-[#e8e2f0] rounded-lg">
@@ -864,48 +920,42 @@
             `;
 
             const form = document.getElementById('transaction-form');
-            form.onsubmit = async (e) => {
+            if(form) form.onsubmit = async (e) => {
                 e.preventDefault();
-                const type = document.getElementById('transactionType').value;
-                const dateStr = document.getElementById('transactionDate').value;
-                const amount = parseCurrency(document.getElementById('transactionAmount').value);
-                const description = document.getElementById('transactionDescription').value.trim();
+                const typeEl = document.getElementById('transactionType');
+                const dateEl = document.getElementById('transactionDate');
+                const amountEl = document.getElementById('transactionAmount');
+                const descriptionEl = document.getElementById('transactionDescription');
+
+                if(!typeEl || !dateEl || !amountEl || !descriptionEl) return;
+
+                const type = typeEl.value;
+                const dateStr = dateEl.value;
+                const amount = parseCurrency(amountEl.value);
+                const description = descriptionEl.value.trim();
 
                 if (!dateStr || amount <= 0 || !description) {
                     showCustomAlert('Preencha todos os campos da transação corretamente.', 'error');
                     return;
                 }
-                // Converter data string para Timestamp do Firebase
-                const dateParts = dateStr.split('-'); // YYYY-MM-DD
-                const date = Timestamp.fromDate(new Date(dateParts[0], dateParts[1] - 1, dateParts[2]));
-
+                const dateParts = dateStr.split('-');
+                const date = Timestamp.fromDate(new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2])));
 
                 try {
                     await addDoc(collection(db, getUserDataPath('transactions')), {
-                        type,
-                        date,
-                        amount,
-                        description,
-                        createdAt: Timestamp.now() // Para ordenação interna se necessário
+                        type, date, amount, description, createdAt: Timestamp.now()
                     });
                     showCustomAlert('Transação adicionada!', 'success');
                     form.reset();
-                    document.getElementById('transactionDate').value = new Date().toISOString().split('T')[0]; // Reset data para hoje
+                    dateEl.value = new Date().toISOString().split('T')[0]; 
                 } catch (error) {
                     console.error("Erro ao adicionar transação:", error);
                     showCustomAlert('Erro ao adicionar transação. Tente novamente.', 'error');
                 }
             };
             
-            document.getElementById('transactionAmount').addEventListener('input', (e) => {
-                let value = e.target.value.replace(/\D/g, '');
-                 if (value) {
-                    value = (parseInt(value) / 100).toFixed(2).replace('.', ',');
-                    e.target.value = 'R$ ' + value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
-                } else {
-                    e.target.value = '';
-                }
-            });
+            const transactionAmountInput = document.getElementById('transactionAmount');
+            if(transactionAmountInput) transactionAmountInput.addEventListener('input', applyCurrencyMask);
 
             updateTransactionsList();
         }
@@ -926,8 +976,8 @@
 
             transactionsCache.forEach(tx => {
                 const tr = document.createElement('tr');
-                const txDate = tx.date instanceof Timestamp ? tx.date.toDate() : new Date(tx.date);
-                const formattedDate = txDate.toLocaleDateString('pt-BR');
+                const txDate = tx.date instanceof Timestamp ? tx.date.toDate() : new Date(tx.date.seconds * 1000); // Handle Firestore Timestamp or plain object from cache
+                const formattedDate = txDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' }); // Adicionado UTC para consistência
                 
                 const amountDisplay = tx.type === 'entrada' ? formatCurrency(tx.amount) : `-${formatCurrency(tx.amount)}`;
                 const amountColor = tx.type === 'entrada' ? 'text-green-600' : 'text-red-600';
@@ -947,7 +997,8 @@
                         <button class="text-red-500 hover:text-red-700 text-xs font-medium" data-id="${tx.id}">Excluir</button>
                     </td>
                 `;
-                tr.querySelector('button').onclick = async () => {
+                const deleteButton = tr.querySelector('button');
+                if(deleteButton) deleteButton.onclick = async () => {
                      showModal(
                         'Confirmar Exclusão',
                         `Tem certeza que deseja excluir a transação "${tx.description}"?`,
@@ -955,7 +1006,6 @@
                             try {
                                 await deleteDoc(doc(db, getUserDataPath('transactions'), tx.id));
                                 showCustomAlert('Transação excluída!', 'success');
-                                // onSnapshot irá atualizar
                             } catch (error) {
                                 console.error("Erro ao excluir transação:", error);
                                 showCustomAlert('Erro ao excluir. Tente novamente.', 'error');
@@ -972,6 +1022,7 @@
 
         // 6. Dashboard Resumo
         async function renderDashboardSection() {
+            if (!contentArea) return;
             contentArea.innerHTML = `
                 <h2 class="text-2xl font-semibold mb-6 text-[#d295bf]">Dashboard Resumo Mensal</h2>
                 <div id="dashboard-content" class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1003,14 +1054,15 @@
         }
         
         function updateDashboardData() {
-            if (!document.getElementById('dashboard-content')) return; // Só atualiza se o dashboard estiver visível
+            const dashboardEl = document.getElementById('dashboard-content');
+            if (!dashboardEl) return; 
 
             const now = new Date();
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
 
             const monthlyTransactions = transactionsCache.filter(tx => {
-                const txDate = tx.date instanceof Timestamp ? tx.date.toDate() : new Date(tx.date);
+                const txDate = tx.date instanceof Timestamp ? tx.date.toDate() : new Date(tx.date.seconds * 1000);
                 return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
             });
 
@@ -1029,35 +1081,27 @@
 
             const netProfit = totalSales - totalExpenses;
             const avgSaleValue = salesCount > 0 ? totalSales / salesCount : 0;
-
-            // Estimativa de pares vendidos: assumindo que cada transação de entrada é um par. 
-            // Isso é uma simplificação. Para ser mais preciso, o usuário teria que registrar os pares.
             const pairsSoldCount = salesCount; 
 
-            document.getElementById('monthly-net-profit').textContent = formatCurrency(netProfit);
-            document.getElementById('monthly-total-sales').textContent = formatCurrency(totalSales);
-            document.getElementById('monthly-total-expenses').textContent = formatCurrency(totalExpenses);
-            document.getElementById('monthly-pairs-sold').textContent = pairsSoldCount;
-            document.getElementById('monthly-avg-sale-value').textContent = formatCurrency(avgSaleValue);
+            const netProfitEl = document.getElementById('monthly-net-profit');
+            const totalSalesEl = document.getElementById('monthly-total-sales');
+            const totalExpensesEl = document.getElementById('monthly-total-expenses');
+            const pairsSoldEl = document.getElementById('monthly-pairs-sold');
+            const avgSaleValueEl = document.getElementById('monthly-avg-sale-value');
+
+            if(netProfitEl) netProfitEl.textContent = formatCurrency(netProfit);
+            if(totalSalesEl) totalSalesEl.textContent = formatCurrency(totalSales);
+            if(totalExpensesEl) totalExpensesEl.textContent = formatCurrency(totalExpenses);
+            if(pairsSoldEl) pairsSoldEl.textContent = pairsSoldCount;
+            if(avgSaleValueEl) avgSaleValueEl.textContent = formatCurrency(avgSaleValue);
         }
 
         // --- Inicialização ---
-        function init() {
-            // A autenticação já chama renderMenu e loadInitialData
-            // Se precisar de algo mais na inicialização, coloque aqui.
-            // Por exemplo, se a primeira view não for o menu:
-            if (isAuthReady) { // Garante que só roda se auth estiver ok
-                renderMenu();
-                contentArea.innerHTML = `<p class="text-center text-gray-500">Bem-vinda à Precyz! Selecione uma opção do menu para começar.</p>`;
-            }
-        }
-        
-        // Chama init quando o DOM estiver pronto, mas a autenticação pode demorar mais.
-        // A lógica de onAuthStateChanged já lida com o fluxo pós-autenticação.
         document.addEventListener('DOMContentLoaded', () => {
-             // A autenticação é assíncrona, então renderMenu() e loadInitialData() são chamados dentro de onAuthStateChanged.
-             // Apenas uma mensagem inicial pode ser colocada aqui, se necessário.
-             console.log("DOM carregado. Aguardando Firebase Auth...");
+            console.log("DOM carregado. Aguardando Firebase Auth...");
+            // A lógica de autenticação e renderização inicial do menu é disparada por onAuthStateChanged.
+            // Se o Firebase não inicializar, os alertas e logs no console indicarão o problema.
+            // Uma mensagem inicial na contentArea é definida no HTML.
         });
 
     </script>
